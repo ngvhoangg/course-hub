@@ -1,0 +1,32 @@
+# Environment
+.env
+
+# Gradle / Build
+.gradle/
+build/
+out/
+backend/.gradle/
+backend/build/
+backend/out/
+backend/bin/
+
+# IDE
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Backup
+backup/
+
+# Misc
+*.tmp
+
+.vscode/
+
+logs/

@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: course-hub
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/course_hub}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    validate-on-migrate: false
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.trusted.packages: "com.example.coursehub.common.kafka.event"
+
+jwt:
+  secret: ${JWT_SECRET}
+  access-token-expiration: 900000        # 15 minutes
+  refresh-token-expiration: 604800000    # 7 days
+
+sendgrid:
+  api-key: ${SENDGRID_API_KEY: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}
+  from-email: ${SENDGRID_FROM_EMAIL:hoanghamhocc@gmail.com}
+  verification-url: ${SENDGRID_VERIFICATION_URL:http://localhost:8081/api/auth/verify}
+
+app:
+  cookie:
+    secure: false
+
+logging:
+  level:
+    org.flywaydb: DEBUG
+
+server:
+  port: 8081

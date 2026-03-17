@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Email Verification</title>
+</head>
+
+<body style="margin:0;padding:0;background-color:#f4f6f8;font-family:Arial,Helvetica,sans-serif;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f6f8;padding:40px 0;">
+    <tr>
+        <td align="center">
+
+            <table width="600" cellpadding="0" cellspacing="0" style="background:white;border-radius:8px;padding:40px;box-shadow:0 2px 8px rgba(0,0,0,0.05);">
+
+                <tr>
+                    <td align="center" style="padding-bottom:20px;">
+                        <h2 style="margin:0;color:#2c3e50;">Verify Your Email</h2>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="color:#555;font-size:15px;line-height:1.6;padding-bottom:25px;">
+                        Hello,<br><br>
+                        Thank you for creating an account. To complete your registration, please verify your email address by clicking the button below.
+                    </td>
+                </tr>
+
+                <tr>
+                    <td align="center" style="padding:20px 0;">
+                        <a href="{{verificationLink}}"
+                           style="background-color:#2563eb;color:white;padding:14px 28px;text-decoration:none;border-radius:6px;font-weight:bold;display:inline-block;">
+                            Verify Email
+                        </a>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="color:#666;font-size:14px;line-height:1.6;padding-top:10px;">
+                        This verification link will expire in <b>24 hours</b>.
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="color:#666;font-size:14px;line-height:1.6;padding-top:20px;">
+                        If the button above does not work, copy and paste the following link into your browser:
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="word-break:break-all;color:#2563eb;font-size:13px;padding-top:8px;">
+                        {{verificationLink}}
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="border-top:1px solid #eee;margin-top:30px;padding-top:25px;color:#888;font-size:13px;line-height:1.5;">
+                        If you did not create an account, you can safely ignore this email.
+                    </td>
+                </tr>
+
+                <tr>
+                    <td align="center" style="padding-top:30px;color:#aaa;font-size:12px;">
+                        © 2026 Course Tracker. All rights reserved.
+                    </td>
+                </tr>
+
+            </table>
+
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>
