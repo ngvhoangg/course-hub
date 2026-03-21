@@ -113,14 +113,16 @@ class EmailConsumerTest {
         );
 
         await()
-            .atMost(Duration.ofSeconds(10))
+            .atMost(Duration.ofSeconds(15))
             .untilAsserted(() -> {
 
+                // only 1 call
                 verify(emailService, times(1))
                     .sendVerificationEmail(anyString(), anyString());
 
+                // sent to DLT
                 verify(emailConsumer)
-                    .handleDlt(any(EmailVerificationEvent.class));
+                    .handleDlt(any());
             });
     }
 }

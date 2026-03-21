@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.DltHandler;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.annotation.RetryableTopic;
+import org.springframework.kafka.retrytopic.DltStrategy;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.stereotype.Component;
 
@@ -25,7 +26,9 @@ public class EmailConsumer {
         backoff = @Backoff(delay = 3000, multiplier = 2), // 3s -> 6s -> 12s
         autoCreateTopics = "true",
         exclude = {IllegalArgumentException.class,         // don't retry on bad input
-            IllegalStateException.class}            // don't retry on config errors
+            IllegalStateException.class},                  // don't retry on config errors
+        dltStrategy = DltStrategy.FAIL_ON_ERROR
+
     )
     @KafkaListener(topics = Topics.EMAIL_VERIFICATION, groupId = ConsumerGroups.EMAIL)
     public void handleEmailVerification(EmailVerificationEvent event) {
