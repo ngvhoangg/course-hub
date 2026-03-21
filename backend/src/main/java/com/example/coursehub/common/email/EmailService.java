@@ -28,27 +28,6 @@ public class EmailService {
         this.sendGridProperties = sendGridProperties;
     }
 
-//    public void sendVerificationEmail(String toEmail, String token) {
-//        Email from = new Email(sendGridProperties.getFromEmail());
-//        Email to = new Email(toEmail);
-//        String subject = "Verify your Email";
-//        String verificationLink = sendGridProperties.getVerificationUrl() + "?token=" + token;
-//        Content content = new Content("text/html", loadTemplate(verificationLink));
-//
-//        Mail mail = new Mail(from, subject, to, content);
-//        Request request = new Request();
-//
-//        try {
-//            request.setMethod(Method.POST);
-//            request.setEndpoint("mail/send");
-//            request.setBody(mail.build());
-//            sendGrid.api(request);
-//        } catch (IOException e) {
-//            log.error("Failed to send email to {}: {}", toEmail, e.getMessage());
-//            throw new SystemError(ErrorCode.EMAIL_SEND_FAILED);
-//        }
-//    }
-
     public void sendVerificationEmail(String toEmail, String token) {
         if (toEmail == null || toEmail.isBlank()) {
             throw new IllegalArgumentException("toEmail must not be null or empty");
