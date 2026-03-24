@@ -60,11 +60,15 @@ public class AuthController {
 
     @PostMapping("/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void logout(@CookieValue(name = "refreshToken", required = false) String refreshToken,
-                       HttpServletResponse response) {
-        if (refreshToken != null) {
-            authService.logout(refreshToken);
-        }
+    public void logout(
+        @CookieValue(name = "refreshToken", required = false) String refreshToken,
+        @RequestHeader(value = "Authorization", required = false) String authHeader,
+        HttpServletResponse response) {
+        String accessToken = authHeader != null && authHeader.startsWith("Bearer ")
+            ? authHeader.substring(7) : null;
+
+        authService.logout(accessToken, refreshToken);
+
         response.addHeader(HttpHeaders.SET_COOKIE,
             cookieUtils.clearRefreshTokenCookie().toString());
     }

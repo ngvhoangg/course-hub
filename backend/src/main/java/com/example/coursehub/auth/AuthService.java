@@ -8,5 +8,5 @@ public interface AuthService {
     void resendVerification(String email);
     void verifyEmail(String token);
     AuthResult refresh(String refreshToken);
-    void logout(String refreshToken);
+    void logout(String accessToken, String refreshToken);
 }

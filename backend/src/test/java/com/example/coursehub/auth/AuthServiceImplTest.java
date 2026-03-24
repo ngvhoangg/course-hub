@@ -33,6 +33,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -46,6 +47,7 @@ class AuthServiceImplTest {
     @Mock private RefreshTokenRepository refreshTokenRepository;
     @Mock private JwtProperties jwtProperties;
     @Mock private EventProducer eventProducer;
+    @Mock private TokenBlacklistService tokenBlacklistService;
 
     @InjectMocks
     private AuthServiceImpl authService;
@@ -317,26 +319,61 @@ class AuthServiceImplTest {
     // ==================== logout ====================
 
     @Test
-    void logout_shouldRevokeToken_whenTokenValid() {
+    void logout_shouldBlacklistAccessTokenAndRevokeRefreshToken() {
         RefreshToken refreshToken = new RefreshToken();
         refreshToken.setRevoked(false);
 
-        when(refreshTokenRepository.findByTokenAndRevokedFalse("valid-token"))
+        when(jwtTokenProvider.getJtiFromToken("access-token")).thenReturn("jti-123");
+        when(jwtTokenProvider.getRemainingExpiry("access-token")).thenReturn(3600L);
+        when(jwtTokenProvider.getEmailFromToken("access-token")).thenReturn("user@example.com");
+        when(refreshTokenRepository.findByTokenAndRevokedFalse("refresh-token"))
             .thenReturn(Optional.of(refreshToken));
 
-        authService.logout("valid-token");
+        authService.logout("access-token", "refresh-token");
 
+        verify(tokenBlacklistService).blacklist("jti-123", "user@example.com", 3600L);
         assertThat(refreshToken.isRevoked()).isTrue();
         verify(refreshTokenRepository).save(refreshToken);
     }
 
     @Test
-    void logout_shouldDoNothing_whenTokenNotFound() {
+    void logout_shouldOnlyBlacklistAccessToken_whenRefreshTokenIsNull() {
+        when(jwtTokenProvider.getJtiFromToken("access-token")).thenReturn("jti-123");
+        when(jwtTokenProvider.getRemainingExpiry("access-token")).thenReturn(3600L);
+        when(jwtTokenProvider.getEmailFromToken("access-token")).thenReturn("user@example.com");
+
+        authService.logout("access-token", null);
+
+        verify(tokenBlacklistService).blacklist("jti-123", "user@example.com", 3600L);
+        verify(refreshTokenRepository, never()).findByTokenAndRevokedFalse(any());
+    }
+
+    @Test
+    void logout_shouldOnlyRevokeRefreshToken_whenAccessTokenIsNull() {
+        RefreshToken refreshToken = new RefreshToken();
+        refreshToken.setRevoked(false);
+
+        when(refreshTokenRepository.findByTokenAndRevokedFalse("refresh-token"))
+            .thenReturn(Optional.of(refreshToken));
+
+        authService.logout(null, "refresh-token");
+
+        verify(tokenBlacklistService, never()).blacklist(any(), any(), anyLong());
+        assertThat(refreshToken.isRevoked()).isTrue();
+        verify(refreshTokenRepository).save(refreshToken);
+    }
+
+    @Test
+    void logout_shouldDoNothing_whenRefreshTokenNotFound() {
+        when(jwtTokenProvider.getJtiFromToken("access-token")).thenReturn("jti-123");
+        when(jwtTokenProvider.getRemainingExpiry("access-token")).thenReturn(3600L);
+        when(jwtTokenProvider.getEmailFromToken("access-token")).thenReturn("user@example.com");
         when(refreshTokenRepository.findByTokenAndRevokedFalse("invalid-token"))
             .thenReturn(Optional.empty());
 
-        authService.logout("invalid-token");
+        authService.logout("access-token", "invalid-token");
 
+        verify(tokenBlacklistService).blacklist("jti-123", "user@example.com", 3600L);
         verify(refreshTokenRepository, never()).save(any());
     }
 }

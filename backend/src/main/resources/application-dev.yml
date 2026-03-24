@@ -24,18 +24,24 @@ spring:
     consumer:
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonSerializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "com.example.coursehub.common.kafka.event"
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      repositories:
+        enabled: false
 
 jwt:
-  secret: ${JWT_SECRET}
+  secret: ${JWT_SECRET:key}
   access-token-expiration: 900000        # 15 minutes
   refresh-token-expiration: 604800000    # 7 days
 
 sendgrid:
-  api-key: ${SENDGRID_API_KEY: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}
-  from-email: ${SENDGRID_FROM_EMAIL:hoanghamhocc@gmail.com}
+  api-key: ${SENDGRID_API_KEY:key}
+  from-email: ${SENDGRID_FROM_EMAIL:abc@gmail.com}
   verification-url: ${SENDGRID_VERIFICATION_URL:http://localhost:8081/api/auth/verify}
 
 app:
