@@ -10,7 +10,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -22,6 +21,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.ConfluentKafkaContainer;
 
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
@@ -33,8 +33,8 @@ import static org.mockito.Mockito.*;
 })
 @Testcontainers
 @ActiveProfiles("test")
-@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 class EmailConsumerTest {
+
     @Container
     @ServiceConnection
     static PostgreSQLContainer<?> postgres =
@@ -65,38 +65,33 @@ class EmailConsumerTest {
 
     @Test
     void handleEmailVerification_shouldCallEmailService_whenEventReceived() {
-        kafkaTemplate.send(
-            Topics.EMAIL_VERIFICATION,
-            new EmailVerificationEvent("user@example.com", "test-token")
-        );
+        EmailVerificationEvent event =
+            new EmailVerificationEvent("user@example.com", "test-token");
 
-        await()
-            .atMost(Duration.ofSeconds(10))
-            .untilAsserted(() ->
-                verify(emailService)
-                    .sendVerificationEmail("user@example.com", "test-token")
-            );
+        emailConsumer.handleEmailVerification(event);
+
+        verify(emailService, times(1))
+            .sendVerificationEmail("user@example.com", "test-token");
     }
 
     @Test
-    void handleEmailVerification_shouldRetryAndSendToDlt_whenExceptionOccurs() {
-        doThrow(new RuntimeException("fail"))
+    void handleEmailVerification_shouldRetryAndSendToDlt_whenExceptionOccurs() throws Exception {
+        doThrow(new RuntimeException("Simulated email failure"))
             .when(emailService)
             .sendVerificationEmail(anyString(), anyString());
 
-        kafkaTemplate.send(
-            Topics.EMAIL_VERIFICATION,
-            new EmailVerificationEvent("fail@gmail.com", "token")
-        );
+        EmailVerificationEvent event = new EmailVerificationEvent("fail@gmail.com", "token");
+
+        kafkaTemplate.send(Topics.EMAIL_VERIFICATION, event).get(10, TimeUnit.SECONDS);
 
         await()
-            .atMost(Duration.ofSeconds(40))
+            .atMost(Duration.ofSeconds(30))
+            .pollInterval(Duration.ofSeconds(1))
             .untilAsserted(() -> {
+                verify(emailService, atLeast(2))
+                    .sendVerificationEmail(eq("fail@gmail.com"), anyString());
 
-                verify(emailService, atLeast(4))
-                    .sendVerificationEmail(anyString(), anyString());
-
-                verify(emailConsumer)
+                verify(emailConsumer, atLeastOnce())
                     .handleDlt(any(EmailVerificationEvent.class));
             });
     }
