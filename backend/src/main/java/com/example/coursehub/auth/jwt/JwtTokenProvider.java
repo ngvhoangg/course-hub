@@ -43,6 +43,7 @@ public class JwtTokenProvider {
         return Jwts.builder()
             .subject(authentication.getName())
             .claim("role", role)
+            .id(UUID.randomUUID().toString())
             .issuedAt(new Date())
             .expiration(new Date(System.currentTimeMillis() + jwtProperties.getAccessTokenExpiration()))
             .signWith(getSigningKey())
@@ -70,5 +71,14 @@ public class JwtTokenProvider {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    public String getJtiFromToken(String token) {
+        return parseClaims(token).getId();
+    }
+
+    public long getRemainingExpiry(String token) {
+        Date expiry = parseClaims(token).getExpiration();
+        return expiry.getTime() - System.currentTimeMillis();
     }
 }

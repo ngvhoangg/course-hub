@@ -271,7 +271,7 @@ class AuthControllerTest {
     // ==================== logout ====================
 
     @Test
-    void logout_shouldRevokeTokenAndClearCookie() throws Exception {
+    void logout_shouldReturn204NoContent() throws Exception {
         String setCookieHeader = mockMvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
@@ -285,10 +285,50 @@ class AuthControllerTest {
 
         mockMvc.perform(post("/api/auth/logout")
                 .cookie(new Cookie("refreshToken", refreshToken)))
-            .andExpect(status().isNoContent())
-            .andExpect(header().exists("Set-Cookie"));
+            .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void logout_shouldRevokeRefreshToken() throws Exception {
+        String setCookieHeader = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(
+                    new LoginRequest("user@example.com", "Password1!")
+                )))
+            .andReturn()
+            .getResponse()
+            .getHeader("Set-Cookie");
+
+        String refreshToken = setCookieHeader.split(";")[0].split("=")[1];
+
+        mockMvc.perform(post("/api/auth/logout")
+                .cookie(new Cookie("refreshToken", refreshToken)));
 
         assertThat(refreshTokenRepository.findByToken(refreshToken).get().isRevoked()).isTrue();
+    }
+
+    @Test
+    void logout_shouldClearRefreshTokenCookie() throws Exception {
+        String setCookieHeader = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(
+                    new LoginRequest("user@example.com", "Password1!")
+                )))
+            .andReturn()
+            .getResponse()
+            .getHeader("Set-Cookie");
+
+        String refreshToken = setCookieHeader.split(";")[0].split("=")[1];
+
+        String clearCookieHeader = mockMvc.perform(post("/api/auth/logout")
+                .cookie(new Cookie("refreshToken", refreshToken)))
+            .andReturn()
+            .getResponse()
+            .getHeader("Set-Cookie");
+
+        assertThat(clearCookieHeader)
+            .contains("refreshToken=")
+            .contains("Max-Age=0");
     }
 
     @Test

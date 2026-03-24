@@ -40,6 +40,9 @@ dependencies {
     // Kafka
     implementation("org.springframework.kafka:spring-kafka")
 
+    // Redis
+    implementation("org.springframework.boot:spring-boot-starter-data-redis")
+
     // JWT
     implementation("io.jsonwebtoken:jjwt-api:0.12.6")
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
@@ -59,6 +62,9 @@ dependencies {
 
     // spring kafka test
     testImplementation("org.springframework.kafka:spring-kafka-test")
+
+    // redis test
+    testImplementation("com.redis:testcontainers-redis:2.2.2")
 }
 
 dependencyManagement {

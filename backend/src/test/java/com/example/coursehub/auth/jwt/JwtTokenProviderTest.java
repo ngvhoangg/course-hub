@@ -122,4 +122,41 @@ class JwtTokenProviderTest {
         String token = jwtTokenProvider.generateAccessToken(authentication);
         assertThat(jwtTokenProvider.getEmailFromToken(token)).isEqualTo("test@example.com");
     }
+
+    // getJtiFromToken
+    @Test
+    void getJtiFromToken_shouldReturnValidJti() {
+        String token = jwtTokenProvider.generateAccessToken(authentication);
+        String jti = jwtTokenProvider.getJtiFromToken(token);
+
+        assertThat(jti).isNotNull().isNotBlank();
+    }
+
+    @Test
+    void getJtiFromToken_shouldReturnUniqueJtiForEachToken() {
+        String token1 = jwtTokenProvider.generateAccessToken(authentication);
+        String token2 = jwtTokenProvider.generateAccessToken(authentication);
+
+        String jti1 = jwtTokenProvider.getJtiFromToken(token1);
+        String jti2 = jwtTokenProvider.getJtiFromToken(token2);
+
+        assertThat(jti1).isNotEqualTo(jti2);
+    }
+
+    // getRemainingExpiry
+    @Test
+    void getRemainingExpiry_shouldReturnPositiveValue_forValidToken() {
+        String token = jwtTokenProvider.generateAccessToken(authentication);
+        long remainingExpiry = jwtTokenProvider.getRemainingExpiry(token);
+
+        assertThat(remainingExpiry).isPositive();
+    }
+
+    @Test
+    void getRemainingExpiry_shouldReturnLessThanTokenExpiration() {
+        String token = jwtTokenProvider.generateAccessToken(authentication);
+        long remainingExpiry = jwtTokenProvider.getRemainingExpiry(token);
+
+        assertThat(remainingExpiry).isLessThan(jwtProperties.getAccessTokenExpiration());
+    }
 }

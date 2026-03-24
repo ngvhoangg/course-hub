@@ -35,8 +35,9 @@ public class AuthServiceImpl implements AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtProperties jwtProperties;
     private final EventProducer eventProducer;
+    private final TokenBlacklistService tokenBlacklistService;
 
-    public AuthServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, JwtTokenProvider jwtTokenProvider, EmailVerificationTokenRepository emailVerificationTokenRepository, RefreshTokenRepository refreshTokenRepository, JwtProperties jwtProperties, EventProducer eventProducer) {
+    public AuthServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, JwtTokenProvider jwtTokenProvider, EmailVerificationTokenRepository emailVerificationTokenRepository, RefreshTokenRepository refreshTokenRepository, JwtProperties jwtProperties, EventProducer eventProducer, TokenBlacklistService tokenBlacklistService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
@@ -45,6 +46,7 @@ public class AuthServiceImpl implements AuthService {
         this.refreshTokenRepository = refreshTokenRepository;
         this.jwtProperties = jwtProperties;
         this.eventProducer = eventProducer;
+        this.tokenBlacklistService = tokenBlacklistService;
     }
 
     @Override
@@ -166,12 +168,23 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public void logout(String refreshToken) {
-        refreshTokenRepository.findByTokenAndRevokedFalse(refreshToken)
-            .ifPresent(t -> {
-                t.setRevoked(true);
-                refreshTokenRepository.save(t);
-            });
+    public void logout(String accessToken, String refreshToken) {
+        // blacklist access token
+        if (accessToken != null) {
+            String jti = jwtTokenProvider.getJtiFromToken(accessToken);
+            long ttl = jwtTokenProvider.getRemainingExpiry(accessToken);
+            String email = jwtTokenProvider.getEmailFromToken(accessToken);
+            tokenBlacklistService.blacklist(jti, email, ttl);
+        }
+
+        // revoke refresh token
+        if (refreshToken != null) {
+            refreshTokenRepository.findByTokenAndRevokedFalse(refreshToken)
+                .ifPresent(t -> {
+                    t.setRevoked(true);
+                    refreshTokenRepository.save(t);
+                });
+        }
     }
 
     private void createAndSaveRefreshToken(User user, String tokenString) {
