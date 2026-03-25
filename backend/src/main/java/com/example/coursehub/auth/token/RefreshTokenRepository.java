@@ -14,6 +14,7 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     Optional<RefreshToken> findByToken(String token);
     int deleteByExpiresAtBefore(LocalDateTime dateTime);
     List<RefreshToken> findByUserId(Long userId);
+    Optional<RefreshToken> findBySessionId(String sessionId);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE RefreshToken r SET r.revoked = true WHERE r.user.id = :userId")

@@ -90,7 +90,7 @@ public class AuthServiceImpl implements AuthService {
         String refreshTokenString = jwtTokenProvider.generateRefreshToken(authentication);
 
         // save new refresh token
-        createAndSaveRefreshToken(user, refreshTokenString);
+        createAndSaveRefreshToken(user, refreshTokenString,null);
 
         return new AuthResult(accessToken, refreshTokenString);
     }
@@ -161,7 +161,7 @@ public class AuthServiceImpl implements AuthService {
         String newAccessToken = jwtTokenProvider.generateAccessToken(authentication);
 
         // save new refresh token
-        createAndSaveRefreshToken(user, newRefreshToken);
+        createAndSaveRefreshToken(user, newRefreshToken, null);
 
         return new AuthResult(newAccessToken, newRefreshToken);
     }
@@ -187,10 +187,11 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
-    private void createAndSaveRefreshToken(User user, String tokenString) {
+    private void createAndSaveRefreshToken(User user, String tokenString, String sessionId) {
         RefreshToken refreshToken = new RefreshToken();
         refreshToken.setUser(user);
         refreshToken.setToken(tokenString);
+        refreshToken.setSessionId(sessionId);
         refreshToken.setExpiresAt(LocalDateTime.now().plusSeconds(jwtProperties.getRefreshTokenExpiration() / 1000));
         refreshToken.setRevoked(false);
         refreshToken.setCreatedAt(LocalDateTime.now());

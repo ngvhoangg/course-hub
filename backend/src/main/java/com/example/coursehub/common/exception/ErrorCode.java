@@ -13,6 +13,7 @@ public enum ErrorCode {
     RESOURCE_NOT_FOUND("Resource not found", HttpStatus.NOT_FOUND),
     VERIFICATION_TOKEN_NOT_FOUND("Verification token not found", HttpStatus.NOT_FOUND),
     REFRESH_TOKEN_NOT_FOUND("Refresh token not found", HttpStatus.NOT_FOUND),
+    SESSION_NOT_FOUND("Session not found", HttpStatus.NOT_FOUND),
 
     //403
     ACCESS_DENIED("Access denied", HttpStatus.FORBIDDEN),
@@ -24,6 +25,7 @@ public enum ErrorCode {
     REFRESH_TOKEN_EXPIRED("Refresh token has expired", HttpStatus.UNAUTHORIZED),
     REFRESH_TOKEN_REVOKED("Refresh token has been revoked", HttpStatus.UNAUTHORIZED),
     REFRESH_TOKEN_REUSED("Refresh token reuse detected, please login again", HttpStatus.UNAUTHORIZED),
+    SESSION_EXPIRED("Session has expired", HttpStatus.UNAUTHORIZED),
 
     // 400
     INVALID_INPUT("Invalid input data", HttpStatus.BAD_REQUEST),
