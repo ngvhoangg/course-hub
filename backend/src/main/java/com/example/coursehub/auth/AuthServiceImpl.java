@@ -36,8 +36,9 @@ public class AuthServiceImpl implements AuthService {
     private final JwtProperties jwtProperties;
     private final EventProducer eventProducer;
     private final TokenBlacklistService tokenBlacklistService;
+    private final SessionService sessionService;
 
-    public AuthServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, JwtTokenProvider jwtTokenProvider, EmailVerificationTokenRepository emailVerificationTokenRepository, RefreshTokenRepository refreshTokenRepository, JwtProperties jwtProperties, EventProducer eventProducer, TokenBlacklistService tokenBlacklistService) {
+    public AuthServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, JwtTokenProvider jwtTokenProvider, EmailVerificationTokenRepository emailVerificationTokenRepository, RefreshTokenRepository refreshTokenRepository, JwtProperties jwtProperties, EventProducer eventProducer, TokenBlacklistService tokenBlacklistService, SessionService sessionService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
@@ -47,6 +48,7 @@ public class AuthServiceImpl implements AuthService {
         this.jwtProperties = jwtProperties;
         this.eventProducer = eventProducer;
         this.tokenBlacklistService = tokenBlacklistService;
+        this.sessionService = sessionService;
     }
 
     @Override
@@ -70,7 +72,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public AuthResult login(String email, String password) {
+    public AuthResult login(String email, String password, String ip, String userAgent) {
         User user = userRepository.findByEmail(email)
             .orElseThrow(() -> new UserError(ErrorCode.USER_NOT_FOUND));
 
@@ -86,13 +88,16 @@ public class AuthServiceImpl implements AuthService {
             new UsernamePasswordAuthenticationToken(email, password)
         );
 
-        String accessToken = jwtTokenProvider.generateAccessToken(authentication);
+        // create session
+        String sessionId = sessionService.createSession(user.getId(), ip, userAgent);
+
+        String accessToken = jwtTokenProvider.generateAccessToken(authentication, sessionId);
         String refreshTokenString = jwtTokenProvider.generateRefreshToken(authentication);
 
         // save new refresh token
-        createAndSaveRefreshToken(user, refreshTokenString,null);
+        createAndSaveRefreshToken(user, refreshTokenString, sessionId);
 
-        return new AuthResult(accessToken, refreshTokenString);
+        return new AuthResult(accessToken, refreshTokenString, sessionId);
     }
 
     @Override
@@ -148,6 +153,12 @@ public class AuthServiceImpl implements AuthService {
             throw new UserError(ErrorCode.REFRESH_TOKEN_EXPIRED);
         }
 
+        // verify session exists in Redis
+        String sessionId = token.getSessionId();
+        if (sessionId == null || !sessionService.sessionExists(sessionId)) {
+            throw new UserError(ErrorCode.SESSION_EXPIRED);
+        }
+
         token.setRevoked(true);
         refreshTokenRepository.save(token);
 
@@ -158,12 +169,15 @@ public class AuthServiceImpl implements AuthService {
         );
 
         String newRefreshToken = jwtTokenProvider.generateRefreshToken(authentication);
-        String newAccessToken = jwtTokenProvider.generateAccessToken(authentication);
+        String newAccessToken = jwtTokenProvider.generateAccessToken(authentication, sessionId);
 
         // save new refresh token
-        createAndSaveRefreshToken(user, newRefreshToken, null);
+        createAndSaveRefreshToken(user, newRefreshToken, sessionId);
 
-        return new AuthResult(newAccessToken, newRefreshToken);
+        // update session lastUsedAt
+        sessionService.updateLastUsedAt(sessionId, user.getId());
+
+        return new AuthResult(newAccessToken, newRefreshToken, sessionId);
     }
 
     @Override
@@ -175,6 +189,15 @@ public class AuthServiceImpl implements AuthService {
             long ttl = jwtTokenProvider.getRemainingExpiry(accessToken);
             String email = jwtTokenProvider.getEmailFromToken(accessToken);
             tokenBlacklistService.blacklist(jti, email, ttl);
+
+            // delete session
+            String sessionId = jwtTokenProvider.getSessionIdFromToken(accessToken);
+            if (sessionId != null) {
+                String userEmail = jwtTokenProvider.getEmailFromToken(accessToken);
+                userRepository.findByEmail(userEmail).ifPresent(user ->
+                    sessionService.deleteSession(user.getId(), sessionId)
+                );
+            }
         }
 
         // revoke refresh token

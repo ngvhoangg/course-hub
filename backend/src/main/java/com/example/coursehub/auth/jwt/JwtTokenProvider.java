@@ -33,7 +33,7 @@ public class JwtTokenProvider {
             .getPayload();
     }
 
-    public String generateAccessToken(Authentication authentication){
+    public String generateAccessToken(Authentication authentication, String sessionId){
         String role = authentication.getAuthorities()
             .stream()
             .map(GrantedAuthority::getAuthority)
@@ -43,6 +43,7 @@ public class JwtTokenProvider {
         return Jwts.builder()
             .subject(authentication.getName())
             .claim("role", role)
+            .claim("sessionId", sessionId)
             .id(UUID.randomUUID().toString())
             .issuedAt(new Date())
             .expiration(new Date(System.currentTimeMillis() + jwtProperties.getAccessTokenExpiration()))
@@ -80,5 +81,9 @@ public class JwtTokenProvider {
     public long getRemainingExpiry(String token) {
         Date expiry = parseClaims(token).getExpiration();
         return expiry.getTime() - System.currentTimeMillis();
+    }
+
+    public String getSessionIdFromToken(String token) {
+        return (String) parseClaims(token).get("sessionId");
     }
 }

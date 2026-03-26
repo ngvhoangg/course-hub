@@ -42,6 +42,10 @@ import com.example.coursehub.common.ratelimit.RateLimitFilter;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -63,6 +67,12 @@ class AuthControllerTest {
     @MockitoBean
     private TokenCleanupService tokenCleanupService;
 
+    @MockitoBean
+    private SessionService sessionService;
+
+    @MockitoBean
+    private TokenBlacklistService tokenBlacklistService;
+
     @Container
     @ServiceConnection
     static PostgreSQLContainer<?> postgres =
@@ -79,6 +89,9 @@ class AuthControllerTest {
 
     @BeforeEach
     void setUp() {
+        when(sessionService.createSession(anyLong(), any(), any())).thenReturn("session-test-123");
+        when(sessionService.sessionExists(anyString())).thenReturn(true);
+
         activeUser = new User();
         activeUser.setEmail("user@example.com");
         activeUser.setPasswordHash(passwordEncoder.encode("Password1!"));
@@ -334,6 +347,26 @@ class AuthControllerTest {
     @Test
     void logout_shouldReturn204AndClearCookie_whenCookieMissing() throws Exception {
         mockMvc.perform(post("/api/auth/logout"))
+            .andExpect(status().isNoContent())
+            .andExpect(header().exists("Set-Cookie"));
+    }
+
+    @Test
+    void logout_shouldReturn204_whenAuthorizationHeaderProvided() throws Exception {
+        String loginResponse = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(
+                    new LoginRequest("user@example.com", "Password1!")
+                )))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+        String accessToken = objectMapper.readTree(loginResponse).get("accessToken").asText();
+
+        mockMvc.perform(post("/api/auth/logout")
+                .header("Authorization", "Bearer " + accessToken))
             .andExpect(status().isNoContent())
             .andExpect(header().exists("Set-Cookie"));
     }

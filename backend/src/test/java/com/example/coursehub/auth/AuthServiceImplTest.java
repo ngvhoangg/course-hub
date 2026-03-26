@@ -48,6 +48,7 @@ class AuthServiceImplTest {
     @Mock private JwtProperties jwtProperties;
     @Mock private EventProducer eventProducer;
     @Mock private TokenBlacklistService tokenBlacklistService;
+    @Mock private SessionService sessionService;
 
     @InjectMocks
     private AuthServiceImpl authService;
@@ -121,14 +122,16 @@ class AuthServiceImplTest {
         );
         when(userRepository.findByEmail("active@example.com")).thenReturn(Optional.of(activeUser));
         when(authenticationManager.authenticate(any())).thenReturn(auth);
-        when(jwtTokenProvider.generateAccessToken(auth)).thenReturn("access-token");
+        when(sessionService.createSession(eq(activeUser.getId()), any(), any())).thenReturn("session-123");
+        when(jwtTokenProvider.generateAccessToken(auth, "session-123")).thenReturn("access-token");
         when(jwtTokenProvider.generateRefreshToken(auth)).thenReturn("refresh-token");
         when(jwtProperties.getRefreshTokenExpiration()).thenReturn(604800000L);
 
-        AuthResult result = authService.login("active@example.com", "password");
+        AuthResult result = authService.login("active@example.com", "password", "127.0.0.1", "User-Agent");
 
         assertThat(result.accessToken()).isEqualTo("access-token");
         assertThat(result.refreshToken()).isEqualTo("refresh-token");
+        assertThat(result.sessionId()).isEqualTo("session-123");
         verify(refreshTokenRepository).save(any(RefreshToken.class));
     }
 
@@ -136,7 +139,7 @@ class AuthServiceImplTest {
     void login_shouldThrow_whenUserNotFound() {
         when(userRepository.findByEmail("unknown@example.com")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> authService.login("unknown@example.com", "password"))
+        assertThatThrownBy(() -> authService.login("unknown@example.com", "password", "127.0.0.1", "User-Agent"))
             .isInstanceOf(UserError.class)
             .hasMessageContaining(ErrorCode.USER_NOT_FOUND.getMessage());
     }
@@ -145,7 +148,7 @@ class AuthServiceImplTest {
     void login_shouldThrow_whenEmailNotVerified() {
         when(userRepository.findByEmail("pending@example.com")).thenReturn(Optional.of(pendingUser));
 
-        assertThatThrownBy(() -> authService.login("pending@example.com", "password"))
+        assertThatThrownBy(() -> authService.login("pending@example.com", "password", "127.0.0.1", "User-Agent"))
             .isInstanceOf(UserError.class)
             .hasMessageContaining(ErrorCode.EMAIL_NOT_VERIFIED.getMessage());
     }
@@ -154,7 +157,7 @@ class AuthServiceImplTest {
     void login_shouldThrow_whenAccountDisabled() {
         when(userRepository.findByEmail("disabled@example.com")).thenReturn(Optional.of(disabledUser));
 
-        assertThatThrownBy(() -> authService.login("disabled@example.com", "password"))
+        assertThatThrownBy(() -> authService.login("disabled@example.com", "password", "127.0.0.1", "User-Agent"))
             .isInstanceOf(UserError.class)
             .hasMessageContaining(ErrorCode.ACCOUNT_DISABLED.getMessage());
     }
@@ -164,7 +167,7 @@ class AuthServiceImplTest {
         when(userRepository.findByEmail("active@example.com")).thenReturn(Optional.of(activeUser));
         when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("Bad credentials"));
 
-        assertThatThrownBy(() -> authService.login("active@example.com", "wrongpassword"))
+        assertThatThrownBy(() -> authService.login("active@example.com", "wrongpassword", "127.0.0.1", "User-Agent"))
             .isInstanceOf(BadCredentialsException.class);
     }
 
@@ -259,6 +262,7 @@ class AuthServiceImplTest {
         refreshToken.setUser(activeUser);
         refreshToken.setRevoked(false);
         refreshToken.setExpiresAt(LocalDateTime.now().plusDays(7));
+        refreshToken.setSessionId("session-123");
 
         Authentication auth = new UsernamePasswordAuthenticationToken(
             "active@example.com", null,
@@ -266,16 +270,19 @@ class AuthServiceImplTest {
         );
 
         when(refreshTokenRepository.findByToken("valid-refresh")).thenReturn(Optional.of(refreshToken));
-        when(jwtTokenProvider.generateAccessToken(any())).thenReturn("new-access-token");
-        when(jwtTokenProvider.generateRefreshToken(any())).thenReturn("new-refresh-token");
+        when(sessionService.sessionExists("session-123")).thenReturn(true);
+        when(jwtTokenProvider.generateAccessToken(any(Authentication.class), eq("session-123"))).thenReturn("new-access-token");
+        when(jwtTokenProvider.generateRefreshToken(any(Authentication.class))).thenReturn("new-refresh-token");
         when(jwtProperties.getRefreshTokenExpiration()).thenReturn(604800000L);
 
         AuthResult result = authService.refresh("valid-refresh");
 
         assertThat(result.accessToken()).isEqualTo("new-access-token");
         assertThat(result.refreshToken()).isEqualTo("new-refresh-token");
+        assertThat(result.sessionId()).isEqualTo("session-123");
         assertThat(refreshToken.isRevoked()).isTrue();
         verify(refreshTokenRepository, times(2)).save(any(RefreshToken.class));
+        verify(sessionService).updateLastUsedAt("session-123", activeUser.getId());
     }
 
     @Test

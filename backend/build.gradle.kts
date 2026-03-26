@@ -29,6 +29,7 @@ dependencies {
     implementation("org.postgresql:postgresql")
     implementation ("org.springframework.boot:spring-boot-starter-validation")
     implementation("com.bucket4j:bucket4j-core:8.10.1")
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
 
     //Lombok
     compileOnly("org.projectlombok:lombok")

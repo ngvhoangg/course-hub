@@ -3,6 +3,7 @@ package com.example.coursehub.auth;
 import com.example.coursehub.auth.dto.*;
 import com.example.coursehub.common.exception.ErrorCode;
 import com.example.coursehub.common.exception.UserError;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
@@ -27,11 +28,14 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public AuthResponse login(@Valid @RequestBody LoginRequest request, HttpServletResponse response){
-        AuthResult result = authService.login(request.email(), request.password());
+    public AuthResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest, HttpServletResponse response){
+        String ip = getClientIp(httpRequest);
+        String userAgent = httpRequest.getHeader("User-Agent");
+
+        AuthResult result = authService.login(request.email(), request.password(), ip, userAgent);
         response.addHeader(HttpHeaders.SET_COOKIE,
             cookieUtils.createRefreshTokenCookie(result.refreshToken()).toString());
-        return new AuthResponse(result.accessToken());
+        return new AuthResponse(result.accessToken(), result.sessionId());
     }
 
     @PostMapping("/resend-verification")
@@ -55,7 +59,7 @@ public class AuthController {
         AuthResult result = authService.refresh(refreshToken);
         response.addHeader(HttpHeaders.SET_COOKIE,
             cookieUtils.createRefreshTokenCookie(result.refreshToken()).toString());
-        return new AuthResponse(result.accessToken());
+        return new AuthResponse(result.accessToken(),  result.sessionId());
     }
 
     @PostMapping("/logout")
@@ -71,5 +75,13 @@ public class AuthController {
 
         response.addHeader(HttpHeaders.SET_COOKIE,
             cookieUtils.clearRefreshTokenCookie().toString());
+    }
+
+    private String getClientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isEmpty()) {
+            return forwarded.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }

@@ -23,6 +23,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class JwtTokenProviderTest {
 
+    private static final String TEST_SESSION_ID = "session-test-123";
+
     @Mock
     private JwtProperties jwtProperties;
 
@@ -50,19 +52,19 @@ class JwtTokenProviderTest {
     // generateAccessToken
     @Test
     void generateAccessToken_shouldReturnValidToken() {
-        String token = jwtTokenProvider.generateAccessToken(authentication);
+        String token = jwtTokenProvider.generateAccessToken(authentication, TEST_SESSION_ID);
         assertThat(token).isNotNull();
     }
 
     @Test
     void generateAccessToken_shouldContainEmail() {
-        String token = jwtTokenProvider.generateAccessToken(authentication);
+        String token = jwtTokenProvider.generateAccessToken(authentication, TEST_SESSION_ID);
         assertThat(jwtTokenProvider.getEmailFromToken(token)).isEqualTo("test@example.com");
     }
 
     @Test
     void generateAccessToken_shouldContainRole() {
-        String token = jwtTokenProvider.generateAccessToken(authentication);
+        String token = jwtTokenProvider.generateAccessToken(authentication, TEST_SESSION_ID);
 
         Claims claims = Jwts.parser()
             .verifyWith(Keys.hmacShaKeyFor(Base64.getDecoder().decode(TEST_SECRET)))
@@ -89,7 +91,7 @@ class JwtTokenProviderTest {
     // validateToken
     @Test
     void validateToken_shouldReturnTrue_whenTokenIsValid() {
-        String token = jwtTokenProvider.generateAccessToken(authentication);
+        String token = jwtTokenProvider.generateAccessToken(authentication, TEST_SESSION_ID);
         assertThat(jwtTokenProvider.validateToken(token)).isTrue();
     }
 
@@ -101,13 +103,13 @@ class JwtTokenProviderTest {
     @Test
     void validateToken_shouldReturnFalse_whenTokenIsExpired() {
         when(jwtProperties.getAccessTokenExpiration()).thenReturn(-1000L);
-        String token = jwtTokenProvider.generateAccessToken(authentication);
+        String token = jwtTokenProvider.generateAccessToken(authentication, TEST_SESSION_ID);
         assertThat(jwtTokenProvider.validateToken(token)).isFalse();
     }
 
     @Test
     void validateToken_shouldReturnFalse_whenSignatureInvalid() {
-        String token = jwtTokenProvider.generateAccessToken(authentication);
+        String token = jwtTokenProvider.generateAccessToken(authentication, TEST_SESSION_ID);
 
         when(jwtProperties.getSecret()).thenReturn(
             Base64.getEncoder().encodeToString("different-secret-key-256bits!!!".getBytes())
@@ -119,14 +121,14 @@ class JwtTokenProviderTest {
     // getEmailFromToken
     @Test
     void getEmailFromToken_shouldReturnCorrectEmail() {
-        String token = jwtTokenProvider.generateAccessToken(authentication);
+        String token = jwtTokenProvider.generateAccessToken(authentication, TEST_SESSION_ID);
         assertThat(jwtTokenProvider.getEmailFromToken(token)).isEqualTo("test@example.com");
     }
 
     // getJtiFromToken
     @Test
     void getJtiFromToken_shouldReturnValidJti() {
-        String token = jwtTokenProvider.generateAccessToken(authentication);
+        String token = jwtTokenProvider.generateAccessToken(authentication, TEST_SESSION_ID);
         String jti = jwtTokenProvider.getJtiFromToken(token);
 
         assertThat(jti).isNotNull().isNotBlank();
@@ -134,8 +136,8 @@ class JwtTokenProviderTest {
 
     @Test
     void getJtiFromToken_shouldReturnUniqueJtiForEachToken() {
-        String token1 = jwtTokenProvider.generateAccessToken(authentication);
-        String token2 = jwtTokenProvider.generateAccessToken(authentication);
+        String token1 = jwtTokenProvider.generateAccessToken(authentication, TEST_SESSION_ID);
+        String token2 = jwtTokenProvider.generateAccessToken(authentication, TEST_SESSION_ID);
 
         String jti1 = jwtTokenProvider.getJtiFromToken(token1);
         String jti2 = jwtTokenProvider.getJtiFromToken(token2);
@@ -146,7 +148,7 @@ class JwtTokenProviderTest {
     // getRemainingExpiry
     @Test
     void getRemainingExpiry_shouldReturnPositiveValue_forValidToken() {
-        String token = jwtTokenProvider.generateAccessToken(authentication);
+        String token = jwtTokenProvider.generateAccessToken(authentication, TEST_SESSION_ID);
         long remainingExpiry = jwtTokenProvider.getRemainingExpiry(token);
 
         assertThat(remainingExpiry).isPositive();
@@ -154,7 +156,7 @@ class JwtTokenProviderTest {
 
     @Test
     void getRemainingExpiry_shouldReturnLessThanTokenExpiration() {
-        String token = jwtTokenProvider.generateAccessToken(authentication);
+        String token = jwtTokenProvider.generateAccessToken(authentication, TEST_SESSION_ID);
         long remainingExpiry = jwtTokenProvider.getRemainingExpiry(token);
 
         assertThat(remainingExpiry).isLessThan(jwtProperties.getAccessTokenExpiration());
