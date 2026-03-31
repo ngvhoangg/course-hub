@@ -15,6 +15,12 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 @Configuration
 @ConditionalOnProperty(name = "spring.data.redis.host")
 public class RedisConfig {
+    private final ObjectMapper objectMapper;
+
+    public RedisConfig(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
+
     // 1. String Redis (blacklist)
     @Bean
     public StringRedisTemplate stringRedisTemplate(RedisConnectionFactory connectionFactory) {
@@ -29,11 +35,8 @@ public class RedisConfig {
         RedisTemplate<String, SessionData> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
 
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.registerModule(new JavaTimeModule());
-
         Jackson2JsonRedisSerializer<SessionData> serializer =
-            new Jackson2JsonRedisSerializer<>(mapper, SessionData.class);
+            new Jackson2JsonRedisSerializer<>(objectMapper, SessionData.class);
 
         template.setKeySerializer(new StringRedisSerializer());
         template.setValueSerializer(serializer);
