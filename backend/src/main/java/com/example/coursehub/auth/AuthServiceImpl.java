@@ -1,6 +1,7 @@
 package com.example.coursehub.auth;
 
 import com.example.coursehub.auth.dto.AuthResult;
+import com.example.coursehub.auth.dto.SessionResponse;
 import com.example.coursehub.auth.jwt.JwtProperties;
 import com.example.coursehub.auth.jwt.JwtTokenProvider;
 import com.example.coursehub.auth.token.*;
@@ -23,6 +24,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -208,6 +210,47 @@ public class AuthServiceImpl implements AuthService {
                     refreshTokenRepository.save(t);
                 });
         }
+    }
+
+    @Override
+    public List<SessionResponse> getSessions(String email) {
+        User user = userRepository.findByEmail(email)
+            .orElseThrow(() -> new UserError(ErrorCode.USER_NOT_FOUND));
+        return sessionService.getSessions(user.getId());
+    }
+
+    @Override
+    @Transactional
+    public void deleteSession(String email, String sessionId) {
+        User user = userRepository.findByEmail(email)
+            .orElseThrow(() -> new UserError(ErrorCode.USER_NOT_FOUND));
+
+        sessionService.deleteSession(user.getId(), sessionId);
+        refreshTokenRepository.findBySessionId(sessionId)
+            .ifPresent(t -> {
+                t.setRevoked(true);
+                refreshTokenRepository.save(t);
+            });
+    }
+
+    @Override
+    @Transactional
+    public void deleteAllSessions(String accessToken, String email) {
+        User user = userRepository.findByEmail(email)
+            .orElseThrow(() -> new UserError(ErrorCode.USER_NOT_FOUND));
+
+        // blacklist current access token
+        if (accessToken != null) {
+            String jti = jwtTokenProvider.getJtiFromToken(accessToken);
+            long ttl = jwtTokenProvider.getRemainingExpiry(accessToken);
+            tokenBlacklistService.blacklist(jti, email, ttl);
+        }
+
+        // delete all sessions from Redis
+        Set<String> sessionIds = sessionService.deleteAllSessions(user.getId());
+
+        // revoke all refresh tokens in DB
+        refreshTokenRepository.revokeAllByUserId(user.getId());
     }
 
     private void createAndSaveRefreshToken(User user, String tokenString, String sessionId) {

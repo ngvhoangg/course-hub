@@ -1,6 +1,7 @@
 package com.example.coursehub.auth;
 
 import com.example.coursehub.auth.dto.AuthResult;
+import com.example.coursehub.auth.dto.SessionResponse;
 import com.example.coursehub.auth.jwt.JwtProperties;
 import com.example.coursehub.auth.jwt.JwtTokenProvider;
 import com.example.coursehub.auth.token.*;
@@ -29,6 +30,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -382,5 +384,91 @@ class AuthServiceImplTest {
 
         verify(tokenBlacklistService).blacklist("jti-123", "user@example.com", 3600L);
         verify(refreshTokenRepository, never()).save(any());
+    }
+
+    // ==================== sessions ====================
+
+    @Test
+    void getSessions_shouldReturnSessions_whenUserExists() {
+        List<SessionResponse> expected = List.of(
+            new SessionResponse(
+                "session-123",
+                "127.0.0.1",
+                "JUnit",
+                LocalDateTime.now().minusMinutes(10),
+                LocalDateTime.now()
+            )
+        );
+
+        when(userRepository.findByEmail("active@example.com")).thenReturn(Optional.of(activeUser));
+        when(sessionService.getSessions(activeUser.getId())).thenReturn(expected);
+
+        List<SessionResponse> actual = authService.getSessions("active@example.com");
+
+        assertThat(actual).isEqualTo(expected);
+        verify(sessionService).getSessions(activeUser.getId());
+    }
+
+    @Test
+    void getSessions_shouldThrow_whenUserNotFound() {
+        when(userRepository.findByEmail("unknown@example.com")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.getSessions("unknown@example.com"))
+            .isInstanceOf(UserError.class)
+            .hasMessageContaining(ErrorCode.USER_NOT_FOUND.getMessage());
+
+        verify(sessionService, never()).getSessions(anyLong());
+    }
+
+    @Test
+    void deleteSession_shouldDeleteAndRevokeRefreshToken_whenTokenExists() {
+        RefreshToken token = new RefreshToken();
+        token.setRevoked(false);
+
+        when(userRepository.findByEmail("active@example.com")).thenReturn(Optional.of(activeUser));
+        when(refreshTokenRepository.findBySessionId("session-123")).thenReturn(Optional.of(token));
+
+        authService.deleteSession("active@example.com", "session-123");
+
+        verify(sessionService).deleteSession(activeUser.getId(), "session-123");
+        assertThat(token.isRevoked()).isTrue();
+        verify(refreshTokenRepository).save(token);
+    }
+
+    @Test
+    void deleteSession_shouldDeleteWithoutRevoke_whenTokenNotFound() {
+        when(userRepository.findByEmail("active@example.com")).thenReturn(Optional.of(activeUser));
+        when(refreshTokenRepository.findBySessionId("missing-session")).thenReturn(Optional.empty());
+
+        authService.deleteSession("active@example.com", "missing-session");
+
+        verify(sessionService).deleteSession(activeUser.getId(), "missing-session");
+        verify(refreshTokenRepository, never()).save(any());
+    }
+
+    @Test
+    void deleteAllSessions_shouldBlacklistAndRevokeAll_whenAccessTokenProvided() {
+        when(userRepository.findByEmail("active@example.com")).thenReturn(Optional.of(activeUser));
+        when(jwtTokenProvider.getJtiFromToken("access-token")).thenReturn("jti-123");
+        when(jwtTokenProvider.getRemainingExpiry("access-token")).thenReturn(3600L);
+        when(sessionService.deleteAllSessions(activeUser.getId())).thenReturn(Set.of("s1", "s2"));
+
+        authService.deleteAllSessions("access-token", "active@example.com");
+
+        verify(tokenBlacklistService).blacklist("jti-123", "active@example.com", 3600L);
+        verify(sessionService).deleteAllSessions(activeUser.getId());
+        verify(refreshTokenRepository).revokeAllByUserId(activeUser.getId());
+    }
+
+    @Test
+    void deleteAllSessions_shouldRevokeAllWithoutBlacklist_whenAccessTokenNull() {
+        when(userRepository.findByEmail("active@example.com")).thenReturn(Optional.of(activeUser));
+        when(sessionService.deleteAllSessions(activeUser.getId())).thenReturn(Set.of("s1"));
+
+        authService.deleteAllSessions(null, "active@example.com");
+
+        verify(tokenBlacklistService, never()).blacklist(any(), any(), anyLong());
+        verify(sessionService).deleteAllSessions(activeUser.getId());
+        verify(refreshTokenRepository).revokeAllByUserId(activeUser.getId());
     }
 }

@@ -8,7 +8,9 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -72,6 +74,33 @@ public class AuthController {
             ? authHeader.substring(7) : null;
 
         authService.logout(accessToken, refreshToken);
+
+        response.addHeader(HttpHeaders.SET_COOKIE,
+            cookieUtils.clearRefreshTokenCookie().toString());
+    }
+
+    @GetMapping("/sessions")
+    public List<SessionResponse> getSessions(Authentication authentication) {
+        return authService.getSessions(authentication.getName());
+    }
+
+    @DeleteMapping("/sessions/{sessionId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteSession(@PathVariable String sessionId,
+                              Authentication authentication) {
+        authService.deleteSession(authentication.getName(), sessionId);
+    }
+
+    @DeleteMapping("/sessions")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteAllSessions(
+        Authentication authentication,
+        @RequestHeader(value = "Authorization", required = false) String authHeader,
+        HttpServletResponse response) {
+        String accessToken = authHeader != null && authHeader.startsWith("Bearer ")
+            ? authHeader.substring(7) : null;
+
+        authService.deleteAllSessions(accessToken, authentication.getName());
 
         response.addHeader(HttpHeaders.SET_COOKIE,
             cookieUtils.clearRefreshTokenCookie().toString());

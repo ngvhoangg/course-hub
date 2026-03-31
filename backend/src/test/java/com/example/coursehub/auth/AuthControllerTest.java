@@ -3,6 +3,7 @@ package com.example.coursehub.auth;
 import com.example.coursehub.auth.dto.LoginRequest;
 import com.example.coursehub.auth.dto.RegisterRequest;
 import com.example.coursehub.auth.dto.ResendVerificationRequest;
+import com.example.coursehub.auth.dto.SessionResponse;
 import com.example.coursehub.auth.token.EmailVerificationTokenRepository;
 import com.example.coursehub.auth.token.RefreshTokenRepository;
 import com.example.coursehub.auth.token.TokenCleanupService;
@@ -40,6 +41,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import com.example.coursehub.common.ratelimit.RateLimitFilter;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -285,56 +287,74 @@ class AuthControllerTest {
 
     @Test
     void logout_shouldReturn204NoContent() throws Exception {
-        String setCookieHeader = mockMvc.perform(post("/api/auth/login")
+        var loginResult = mockMvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
                     new LoginRequest("user@example.com", "Password1!")
                 )))
+            .andExpect(status().isOk())
             .andReturn()
-            .getResponse()
-            .getHeader("Set-Cookie");
+            .getResponse();
+
+        String setCookieHeader = loginResult.getHeader("Set-Cookie");
+        String accessToken = objectMapper.readTree(loginResult.getContentAsString())
+            .get("accessToken")
+            .asText();
 
         String refreshToken = setCookieHeader.split(";")[0].split("=")[1];
 
         mockMvc.perform(post("/api/auth/logout")
-                .cookie(new Cookie("refreshToken", refreshToken)))
+                .cookie(new Cookie("refreshToken", refreshToken))
+                .header("Authorization", "Bearer " + accessToken))
             .andExpect(status().isNoContent());
     }
 
     @Test
     void logout_shouldRevokeRefreshToken() throws Exception {
-        String setCookieHeader = mockMvc.perform(post("/api/auth/login")
+        var loginResult = mockMvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
                     new LoginRequest("user@example.com", "Password1!")
                 )))
+            .andExpect(status().isOk())
             .andReturn()
-            .getResponse()
-            .getHeader("Set-Cookie");
+            .getResponse();
+
+        String setCookieHeader = loginResult.getHeader("Set-Cookie");
+        String accessToken = objectMapper.readTree(loginResult.getContentAsString())
+            .get("accessToken")
+            .asText();
 
         String refreshToken = setCookieHeader.split(";")[0].split("=")[1];
 
         mockMvc.perform(post("/api/auth/logout")
-                .cookie(new Cookie("refreshToken", refreshToken)));
+                .cookie(new Cookie("refreshToken", refreshToken))
+                .header("Authorization", "Bearer " + accessToken));
 
         assertThat(refreshTokenRepository.findByToken(refreshToken).get().isRevoked()).isTrue();
     }
 
     @Test
     void logout_shouldClearRefreshTokenCookie() throws Exception {
-        String setCookieHeader = mockMvc.perform(post("/api/auth/login")
+        var loginResult = mockMvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
                     new LoginRequest("user@example.com", "Password1!")
                 )))
+            .andExpect(status().isOk())
             .andReturn()
-            .getResponse()
-            .getHeader("Set-Cookie");
+            .getResponse();
+
+        String setCookieHeader = loginResult.getHeader("Set-Cookie");
+        String accessToken = objectMapper.readTree(loginResult.getContentAsString())
+            .get("accessToken")
+            .asText();
 
         String refreshToken = setCookieHeader.split(";")[0].split("=")[1];
 
         String clearCookieHeader = mockMvc.perform(post("/api/auth/logout")
-                .cookie(new Cookie("refreshToken", refreshToken)))
+                .cookie(new Cookie("refreshToken", refreshToken))
+                .header("Authorization", "Bearer " + accessToken))
             .andReturn()
             .getResponse()
             .getHeader("Set-Cookie");
@@ -346,7 +366,20 @@ class AuthControllerTest {
 
     @Test
     void logout_shouldReturn204AndClearCookie_whenCookieMissing() throws Exception {
-        mockMvc.perform(post("/api/auth/logout"))
+        String loginResponse = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(
+                    new LoginRequest("user@example.com", "Password1!")
+                )))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+        String accessToken = objectMapper.readTree(loginResponse).get("accessToken").asText();
+
+        mockMvc.perform(post("/api/auth/logout")
+                .header("Authorization", "Bearer " + accessToken))
             .andExpect(status().isNoContent())
             .andExpect(header().exists("Set-Cookie"));
     }
@@ -369,5 +402,95 @@ class AuthControllerTest {
                 .header("Authorization", "Bearer " + accessToken))
             .andExpect(status().isNoContent())
             .andExpect(header().exists("Set-Cookie"));
+    }
+
+    // ==================== sessions ====================
+
+    @Test
+    void getSessions_shouldReturnCurrentUserSessions() throws Exception {
+        String loginResponse = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(
+                    new LoginRequest("user@example.com", "Password1!")
+                )))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+        String accessToken = objectMapper.readTree(loginResponse).get("accessToken").asText();
+
+        when(sessionService.getSessions(anyLong())).thenReturn(List.of(
+            new SessionResponse(
+                "session-test-123",
+                "127.0.0.1",
+                "JUnit",
+                LocalDateTime.now().minusMinutes(5),
+                LocalDateTime.now()
+            )
+        ));
+
+        mockMvc.perform(get("/api/auth/sessions")
+                .header("Authorization", "Bearer " + accessToken))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].sessionId").value("session-test-123"))
+            .andExpect(jsonPath("$[0].ip").value("127.0.0.1"))
+            .andExpect(jsonPath("$[0].userAgent").value("JUnit"));
+    }
+
+    @Test
+    void deleteSession_shouldReturn204AndRevokeRefreshToken() throws Exception {
+        String loginResponse = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(
+                    new LoginRequest("user@example.com", "Password1!")
+                )))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+        String accessToken = objectMapper.readTree(loginResponse).get("accessToken").asText();
+
+        mockMvc.perform(delete("/api/auth/sessions/{sessionId}", "session-test-123")
+                .header("Authorization", "Bearer " + accessToken))
+            .andExpect(status().isNoContent());
+
+        assertThat(refreshTokenRepository.findBySessionId("session-test-123"))
+            .isPresent()
+            .get()
+            .extracting("revoked")
+            .isEqualTo(true);
+    }
+
+    @Test
+    void deleteAllSessions_shouldReturn204ClearCookieAndRevokeAllRefreshTokens() throws Exception {
+        String loginResponse = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(
+                    new LoginRequest("user@example.com", "Password1!")
+                )))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+        String accessToken = objectMapper.readTree(loginResponse).get("accessToken").asText();
+
+        String clearCookieHeader = mockMvc.perform(delete("/api/auth/sessions")
+                .header("Authorization", "Bearer " + accessToken))
+            .andExpect(status().isNoContent())
+            .andExpect(header().exists("Set-Cookie"))
+            .andReturn()
+            .getResponse()
+            .getHeader("Set-Cookie");
+
+        assertThat(clearCookieHeader)
+            .contains("refreshToken=")
+            .contains("Max-Age=0");
+
+        assertThat(refreshTokenRepository.findByUserId(activeUser.getId()))
+            .isNotEmpty()
+            .allMatch(t -> t.isRevoked());
     }
 }
