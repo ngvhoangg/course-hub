@@ -26,6 +26,9 @@ public enum ErrorCode {
     REFRESH_TOKEN_REVOKED("Refresh token has been revoked", HttpStatus.UNAUTHORIZED),
     REFRESH_TOKEN_REUSED("Refresh token reuse detected, please login again", HttpStatus.UNAUTHORIZED),
     SESSION_EXPIRED("Session has expired", HttpStatus.UNAUTHORIZED),
+    TOKEN_BLACKLISTED("Token has been blacklisted", HttpStatus.UNAUTHORIZED),
+    ACCESS_TOKEN_EXPIRED("Access token has expired", HttpStatus.UNAUTHORIZED),
+    INVALID_ACCESS_TOKEN("Invalid access token", HttpStatus.UNAUTHORIZED),
 
     // 400
     INVALID_INPUT("Invalid input data", HttpStatus.BAD_REQUEST),

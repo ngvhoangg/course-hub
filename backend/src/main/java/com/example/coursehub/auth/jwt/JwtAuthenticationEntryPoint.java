@@ -26,11 +26,16 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
     public void commence(HttpServletRequest request,
                          HttpServletResponse response,
                          AuthenticationException authException) throws IOException {
-        HttpStatus status = HttpStatus.UNAUTHORIZED;
+        ErrorCode errorCode = (ErrorCode) request.getAttribute("errorCode");
 
+        if (errorCode == null) {
+            errorCode = ErrorCode.UNAUTHORIZED;
+        }
+
+        HttpStatus status = errorCode.getHttpStatus();
         ApiErrorResponse errorResponse = new ApiErrorResponse(
-            ErrorCode.UNAUTHORIZED.getMessage(),
-            ErrorCode.UNAUTHORIZED.name(),
+            errorCode.getMessage(),
+            errorCode.name(),
             status.value(),
             System.currentTimeMillis()
         );
