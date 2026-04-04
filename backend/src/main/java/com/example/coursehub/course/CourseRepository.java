@@ -7,6 +7,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface CourseRepository extends JpaRepository<Course, Long> {
@@ -18,4 +19,13 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
     WHERE c.id = :id
     """)
     Optional<Course> findByIdWithDetails(@Param("id") Long id);
+
+    @Query(value = """
+    SELECT c.* FROM courses c, plainto_tsquery('english', :query) q
+    WHERE c.search_vector @@ q
+    ORDER BY ts_rank(c.search_vector, q) DESC
+    """,
+        countQuery = "SELECT count(*) FROM courses WHERE search_vector @@ plainto_tsquery('english', :query)",
+        nativeQuery = true)
+    Page<Course> searchByKeyword(@Param("query") String query, Pageable pageable);
 }

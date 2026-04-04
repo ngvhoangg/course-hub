@@ -7,6 +7,8 @@ import com.example.coursehub.user.Role;
 import com.example.coursehub.user.User;
 import com.example.coursehub.user.UserRepository;
 import com.example.coursehub.user.UserStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -145,5 +147,52 @@ class CourseRepositoryTest {
     @Test
     void findByIdWithDetails_shouldReturnEmpty_whenNotExists() {
         assertThat(courseRepository.findByIdWithDetails(999L)).isEmpty();
+    }
+
+    @Test
+    void searchByKeyword_shouldReturnMatchingCoursesOrderedByRelevance() {
+        Course titleMatch = new Course();
+        titleMatch.setTitle("UniqueSearchToken Course");
+        titleMatch.setDescription("Description with UniqueSearchToken");
+        titleMatch.setPrice(new BigDecimal("19.99"));
+        titleMatch.setStatus(CourseStatus.PUBLISHED);
+        titleMatch.setImageUrl("http://example.com/image1.jpg");
+        titleMatch.setInstructor(instructor);
+        titleMatch.setCreated_at(LocalDateTime.now());
+        courseRepository.save(titleMatch);
+
+        Course descriptionMatch = new Course();
+        descriptionMatch.setTitle("Another course");
+        descriptionMatch.setDescription("Only description has UniqueSearchToken");
+        descriptionMatch.setPrice(new BigDecimal("29.99"));
+        descriptionMatch.setStatus(CourseStatus.PUBLISHED);
+        descriptionMatch.setImageUrl("http://example.com/image2.jpg");
+        descriptionMatch.setInstructor(instructor);
+        descriptionMatch.setCreated_at(LocalDateTime.now());
+        courseRepository.save(descriptionMatch);
+
+        Page<Course> result = courseRepository.searchByKeyword(
+            "UniqueSearchToken",
+            PageRequest.of(0, 10)
+        );
+
+        assertThat(result.getTotalElements()).isEqualTo(2);
+        assertThat(result.getContent())
+            .extracting(Course::getId)
+            .contains(titleMatch.getId(), descriptionMatch.getId());
+
+        // higher weight for title match should make it first
+        assertThat(result.getContent().get(0).getId()).isEqualTo(titleMatch.getId());
+    }
+
+    @Test
+    void searchByKeyword_shouldReturnEmptyPage_whenNoCourseMatches() {
+        Page<Course> result = courseRepository.searchByKeyword(
+            "KeywordThatDoesNotExist12345",
+            PageRequest.of(0, 10)
+        );
+
+        assertThat(result.getContent()).isEmpty();
+        assertThat(result.getTotalElements()).isZero();
     }
 }

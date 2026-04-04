@@ -11,16 +11,13 @@ import java.util.List;
 
 public interface CourseService {
     Page<CourseListResponse> getCourses(Pageable pageable);
-
     CourseDetailResponse getCourseById(Long id);
-
     CourseDetailResponse createCourse(String title,
                                       String description,
                                       BigDecimal price,
                                       String imageUrl,
                                       List<Long> categoryIds);
-
     CourseDetailResponse updateCourse(Long id, UpdateCourseRequest request);
-
     void deleteCourse(Long id);
+    Page<CourseListResponse> searchCourses(String query, Pageable pageable);
 }

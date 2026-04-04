@@ -82,4 +82,9 @@ public class CourseController {
     public LessonResponse createLesson(@PathVariable Long id, @Valid @RequestBody LessonRequest request) {
         return lessonService.createLesson(id, request.title(), request.content(), request.orderIndex());
     }
+
+    @GetMapping("/search")
+    public Page<CourseListResponse> searchCourses(@RequestParam("q") String query, Pageable pageable) {
+        return courseService.searchCourses(query, pageable);
+    }
 }

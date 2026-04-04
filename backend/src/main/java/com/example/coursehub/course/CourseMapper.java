@@ -1,6 +1,7 @@
 package com.example.coursehub.course;
 
 import com.example.coursehub.category.Category;
+import com.example.coursehub.course.dto.CourseListResponse;
 import com.example.coursehub.lesson.Lesson;
 import com.example.coursehub.course.dto.CourseDetailResponse;
 import com.example.coursehub.lesson.dto.LessonResponse;
@@ -25,6 +26,15 @@ public class CourseMapper {
                 .stream()
                 .map(this::toLessonResponse)
                 .toList()
+        );
+    }
+
+    public CourseListResponse toListResponse(Course course) {
+        return new CourseListResponse(
+            course.getId(),
+            course.getTitle(),
+            course.getPrice(),
+            course.getImageUrl()
         );
     }
 

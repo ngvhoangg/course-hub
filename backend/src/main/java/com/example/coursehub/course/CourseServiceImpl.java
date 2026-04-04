@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 
@@ -125,5 +126,15 @@ public class CourseServiceImpl implements CourseService {
             .orElseThrow(() -> new UserError(ErrorCode.COURSE_NOT_FOUND));
 
         courseRepository.delete(course);
+    }
+
+    @Override
+    public Page<CourseListResponse> searchCourses(String query, Pageable pageable) {
+        if (query == null || query.isBlank()) {
+            return courseRepository.findAll(pageable).map(courseMapper::toListResponse);
+        }
+
+        return courseRepository.searchByKeyword(query, pageable)
+            .map(courseMapper::toListResponse);
     }
 }
