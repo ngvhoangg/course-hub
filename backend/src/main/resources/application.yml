@@ -37,6 +37,9 @@ spring:
     locations: classpath:db/migration
     validate-on-migrate: false
 
+ai:
+  base-url: ${AI_BASE_URL:http://localhost:8000}
+
 jwt:
   secret: ${JWT_SECRET:secret}
   access-token-expiration: 900000        # 15 minutes

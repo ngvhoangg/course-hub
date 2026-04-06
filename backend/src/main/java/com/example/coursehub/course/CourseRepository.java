@@ -28,4 +28,14 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
         countQuery = "SELECT count(*) FROM courses WHERE search_vector @@ plainto_tsquery('english', :query)",
         nativeQuery = true)
     Page<Course> searchByKeyword(@Param("query") String query, Pageable pageable);
+
+    @Query(value = """
+        SELECT c.*
+        FROM courses c
+        LEFT JOIN entity_embeddings e
+          ON e.entity_type = 'COURSE'
+         AND e.entity_id = c.id
+        WHERE e.id IS NULL
+    """, nativeQuery = true)
+    List<Course> findCoursesWithoutEmbedding();
 }

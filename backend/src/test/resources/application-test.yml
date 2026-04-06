@@ -2,7 +2,7 @@ spring:
   application:
     name: course-hub
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:tc:postgresql:17:///testdb}
+    url: ${SPRING_DATASOURCE_URL:jdbc:tc:postgresql:17:///testdb?TC_IMAGE_NAME=pgvector/pgvector:pg17}
     username: ${SPRING_DATASOURCE_USERNAME:test}
     password: ${SPRING_DATASOURCE_PASSWORD:test}
   jpa:
@@ -35,6 +35,9 @@ spring:
       port: ${REDIS_PORT:6379}
       repositories:
         enabled: false
+
+ai:
+  enabled: false
 
 jwt:
   secret: ${JWT_SECRET:eW91ci1zdXBlci1zZWNyZXQta2V5LWZvci10ZXN0aW5nLW9ubHktbWluLTMyLWNoYXJz}
