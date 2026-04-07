@@ -63,7 +63,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if ("GET".equals(method)) {
             if (uri.equals("/api/courses")
                 || uri.equals("/api/courses/search")
-                || uri.equals("/api/categories")) {
+                || uri.equals("/api/categories")
+                || uri.equals("/api/courses/semantic")) {
                 return true;
             }
             // /api/courses/{id}

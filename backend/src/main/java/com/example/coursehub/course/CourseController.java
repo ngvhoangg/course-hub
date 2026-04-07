@@ -1,5 +1,6 @@
 package com.example.coursehub.course;
 
+import com.example.coursehub.ai.search.SemanticSearchService;
 import com.example.coursehub.course.dto.CourseDetailResponse;
 import com.example.coursehub.course.dto.CourseListResponse;
 import com.example.coursehub.course.dto.CreateCourseRequest;
@@ -10,6 +11,7 @@ import com.example.coursehub.review.dto.ReviewResponse;
 import com.example.coursehub.lesson.LessonService;
 import com.example.coursehub.review.ReviewService;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -24,11 +26,13 @@ public class CourseController {
     private final CourseService courseService;
     private final ReviewService reviewService;
     private final LessonService lessonService;
+    private final ObjectProvider<SemanticSearchService> semanticSearchService;
 
-    public CourseController(CourseService courseService, ReviewService reviewService, LessonService lessonService) {
+    public CourseController(CourseService courseService, ReviewService reviewService, LessonService lessonService, ObjectProvider<SemanticSearchService> semanticSearchService) {
         this.courseService = courseService;
         this.reviewService = reviewService;
         this.lessonService = lessonService;
+        this.semanticSearchService = semanticSearchService;
     }
 
     @GetMapping
@@ -86,5 +90,19 @@ public class CourseController {
     @GetMapping("/search")
     public Page<CourseListResponse> searchCourses(@RequestParam("q") String query, Pageable pageable) {
         return courseService.searchCourses(query, pageable);
+    }
+
+    @GetMapping("/semantic")
+    public Page<CourseListResponse> semanticSearch(@RequestParam("q") String query, Pageable pageable) {
+        if (query == null || query.isBlank()) {
+            return Page.empty(pageable);
+        }
+        SemanticSearchService service = semanticSearchService.getIfAvailable();
+
+        if (service == null) {
+            return Page.empty(pageable);
+        }
+
+        return service.search(query, pageable);
     }
 }

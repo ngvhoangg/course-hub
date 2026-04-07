@@ -40,6 +40,7 @@ public class SecurityConfig {
             .exceptionHandling(ex -> ex.authenticationEntryPoint(jwtAuthenticationEntryPoint))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.GET, "/api/courses/search").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/courses/semantic").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/courses").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/courses/{id}").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/courses/{id}/reviews").permitAll()
