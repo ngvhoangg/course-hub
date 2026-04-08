@@ -1,6 +1,8 @@
 package com.example.coursehub.course;
 
-import com.example.coursehub.ai.search.SemanticSearchService;
+import com.example.coursehub.ai.embedding.EntityType;
+import com.example.coursehub.ai.search.SearchMode;
+import com.example.coursehub.ai.search.SearchService;
 import com.example.coursehub.course.dto.CourseDetailResponse;
 import com.example.coursehub.course.dto.CourseListResponse;
 import com.example.coursehub.course.dto.CreateCourseRequest;
@@ -11,7 +13,6 @@ import com.example.coursehub.review.dto.ReviewResponse;
 import com.example.coursehub.lesson.LessonService;
 import com.example.coursehub.review.ReviewService;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -26,13 +27,13 @@ public class CourseController {
     private final CourseService courseService;
     private final ReviewService reviewService;
     private final LessonService lessonService;
-    private final ObjectProvider<SemanticSearchService> semanticSearchService;
+    private final SearchService searchService;
 
-    public CourseController(CourseService courseService, ReviewService reviewService, LessonService lessonService, ObjectProvider<SemanticSearchService> semanticSearchService) {
+    public CourseController(CourseService courseService, ReviewService reviewService, LessonService lessonService, SearchService searchService) {
         this.courseService = courseService;
         this.reviewService = reviewService;
         this.lessonService = lessonService;
-        this.semanticSearchService = semanticSearchService;
+        this.searchService = searchService;
     }
 
     @GetMapping
@@ -88,21 +89,15 @@ public class CourseController {
     }
 
     @GetMapping("/search")
-    public Page<CourseListResponse> searchCourses(@RequestParam("q") String query, Pageable pageable) {
-        return courseService.searchCourses(query, pageable);
-    }
+    public Page<?> searchCourses(
+        @RequestParam("q") String query,
+        @RequestParam(value = "mode", defaultValue = "HYBRID") SearchMode mode,
+        Pageable pageable) {
 
-    @GetMapping("/semantic")
-    public Page<CourseListResponse> semanticSearch(@RequestParam("q") String query, Pageable pageable) {
         if (query == null || query.isBlank()) {
             return Page.empty(pageable);
         }
-        SemanticSearchService service = semanticSearchService.getIfAvailable();
 
-        if (service == null) {
-            return Page.empty(pageable);
-        }
-
-        return service.search(query, pageable);
+        return searchService.search(query, EntityType.COURSE, mode, pageable);
     }
 }

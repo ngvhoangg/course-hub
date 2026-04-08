@@ -13,8 +13,9 @@ public class EntityEmbedding {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "entity_type", nullable = false)
-    private String entityType;
+    private EntityType entityType;
 
     @Column(name = "entity_id", nullable = false)
     private Long entityId;

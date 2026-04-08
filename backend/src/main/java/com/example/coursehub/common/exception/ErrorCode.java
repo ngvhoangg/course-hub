@@ -48,6 +48,7 @@ public enum ErrorCode {
 
     // 500
     EMAIL_SEND_FAILED("Failed to send email", HttpStatus.INTERNAL_SERVER_ERROR),
+    UNSUPPORTED_ENTITY_TYPE("Unsupported entity type", HttpStatus.INTERNAL_SERVER_ERROR),
     INTERNAL_ERROR("Internal server error", HttpStatus.INTERNAL_SERVER_ERROR);
 
     private final String message;
