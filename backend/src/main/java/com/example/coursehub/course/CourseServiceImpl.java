@@ -1,6 +1,10 @@
 package com.example.coursehub.course;
 
+import com.example.coursehub.ai.embedding.EntityType;
 import com.example.coursehub.category.Category;
+import com.example.coursehub.common.kafka.event.EntityAction;
+import com.example.coursehub.common.kafka.event.EntitySyncEvent;
+import com.example.coursehub.common.kafka.producer.EventProducer;
 import com.example.coursehub.user.User;
 import com.example.coursehub.course.dto.CourseDetailResponse;
 import com.example.coursehub.course.dto.CourseListResponse;
@@ -16,9 +20,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
+import java.util.*;
 
 @Service
 public class CourseServiceImpl implements CourseService {
@@ -26,12 +28,14 @@ public class CourseServiceImpl implements CourseService {
     private final UserRepository userRepository;
     private final CategoryRepository categoryRepository;
     private final CourseMapper courseMapper;
+    private final EventProducer eventProducer;
 
-    public CourseServiceImpl(CourseRepository courseRepository, UserRepository userRepository, CategoryRepository categoryRepository, CourseMapper courseMapper) {
+    public CourseServiceImpl(CourseRepository courseRepository, UserRepository userRepository, CategoryRepository categoryRepository, CourseMapper courseMapper, EventProducer eventProducer) {
         this.courseRepository = courseRepository;
         this.userRepository = userRepository;
         this.categoryRepository = categoryRepository;
         this.courseMapper = courseMapper;
+        this.eventProducer = eventProducer;
     }
 
     @Override
@@ -75,6 +79,7 @@ public class CourseServiceImpl implements CourseService {
         course.setCategories(new HashSet<>(categories));
 
         Course savedCourse = courseRepository.save(course);
+        sendUpsertEvent(savedCourse, true);
         return courseMapper.toDetailResponse(savedCourse);
     }
 
@@ -92,6 +97,10 @@ public class CourseServiceImpl implements CourseService {
         {
             throw new UserError(ErrorCode.EMPTY_UPDATE_REQUEST);
         }
+
+        boolean contentChanged = (request.title() != null && !request.title().equals(course.getTitle()))
+            || (request.description() != null && !request.description().equals(course.getDescription()));
+
         if (request.title() != null) {
             course.setTitle(request.title());
         }
@@ -116,6 +125,7 @@ public class CourseServiceImpl implements CourseService {
 
         courseRepository.save(course);
 
+        sendUpsertEvent(course, contentChanged);
         return courseMapper.toDetailResponse(course);
     }
 
@@ -126,6 +136,7 @@ public class CourseServiceImpl implements CourseService {
             .orElseThrow(() -> new UserError(ErrorCode.COURSE_NOT_FOUND));
 
         courseRepository.delete(course);
+        sendDeleteEvent(id);
     }
 
     @Override
@@ -136,5 +147,41 @@ public class CourseServiceImpl implements CourseService {
 
         return courseRepository.searchByKeyword(query, pageable)
             .map(courseMapper::toListResponse);
+    }
+
+    // sync for creating, updating course
+    private void sendUpsertEvent(Course course, boolean reEmbed) {
+        Map<String, Object> metadata = new HashMap<>();
+        if (course.getPrice() != null) {
+            metadata.put("price", course.getPrice());
+        }
+        if (course.getCategories() != null) {
+            metadata.put("category_ids",
+                course.getCategories().stream().map(Category::getId).toList());
+        }
+
+        EntitySyncEvent event = new EntitySyncEvent(
+            course.getId(),
+            EntityType.COURSE,
+            EntityAction.UPSERT,
+            metadata,
+            reEmbed,
+            System.currentTimeMillis()
+        );
+
+        eventProducer.sendEntitySyncEvent(event);
+    }
+
+    // sync for deleting course
+    private void sendDeleteEvent(Long id) {
+        EntitySyncEvent event = new EntitySyncEvent(
+            id,
+            EntityType.COURSE,
+            EntityAction.DELETE,
+            Map.of(),
+            false,
+            System.currentTimeMillis()
+        );
+        eventProducer.sendEntitySyncEvent(event);
     }
 }
