@@ -1,5 +1,10 @@
 package com.example.coursehub.lesson;
 
+import com.example.coursehub.ai.embedding.EntityType;
+import com.example.coursehub.category.Category;
+import com.example.coursehub.common.kafka.event.EntityAction;
+import com.example.coursehub.common.kafka.event.EntitySyncEvent;
+import com.example.coursehub.common.kafka.producer.EventProducer;
 import com.example.coursehub.course.Course;
 import com.example.coursehub.lesson.dto.LessonResponse;
 import com.example.coursehub.common.exception.ErrorCode;
@@ -8,18 +13,22 @@ import com.example.coursehub.course.CourseRepository;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class LessonServiceImpl implements LessonService {
     private final LessonRepository lessonRepository;
     private final LessonMapper lessonMapper;
     private final CourseRepository courseRepository;
+    private final EventProducer eventProducer;
 
-    public LessonServiceImpl(LessonRepository lessonRepository, LessonMapper lessonMapper, CourseRepository courseRepository) {
+    public LessonServiceImpl(LessonRepository lessonRepository, LessonMapper lessonMapper, CourseRepository courseRepository, EventProducer eventProducer) {
         this.lessonRepository = lessonRepository;
         this.lessonMapper = lessonMapper;
         this.courseRepository = courseRepository;
+        this.eventProducer = eventProducer;
     }
 
     @Override
@@ -43,6 +52,8 @@ public class LessonServiceImpl implements LessonService {
         lesson.setCourse(course);
         lessonRepository.save(lesson);
 
+        sendUpsertEvent(lesson, true);
+
         return lessonMapper.toLessonResponse(lesson);
     }
 
@@ -52,23 +63,29 @@ public class LessonServiceImpl implements LessonService {
         Lesson lesson = lessonRepository.findById(id)
             .orElseThrow(() -> new UserError(ErrorCode.LESSON_NOT_FOUND));
 
-        if (title == null &&
-            content == null &&
-            orderIndex == null)
-        {
+        if (title == null && content == null &&  orderIndex == null) {
             throw new UserError(ErrorCode.EMPTY_UPDATE_REQUEST);
         }
-        if(title != null){
+
+        boolean reEmbed = false;
+
+        if (title != null && !title.equals(lesson.getTitle())) {
             lesson.setTitle(title);
+            reEmbed = true;
         }
-        if(content != null){
+
+        if (content != null && !content.equals(lesson.getContent())) {
             lesson.setContent(content);
+            reEmbed = true;
         }
-        if(orderIndex != null){
+
+        if (orderIndex != null) {
             lesson.setOrderIndex(orderIndex);
         }
 
         lessonRepository.save(lesson);
+
+        sendUpsertEvent(lesson, reEmbed);
     }
 
     @Override
@@ -77,6 +94,40 @@ public class LessonServiceImpl implements LessonService {
         Lesson lesson = lessonRepository.findById(id)
             .orElseThrow(() -> new UserError(ErrorCode.LESSON_NOT_FOUND));
 
+        sendDeleteEvent(id);
+
         lessonRepository.delete(lesson);
+    }
+
+    // sync for creating, updating lesson
+    private void sendUpsertEvent(Lesson lesson, boolean reEmbed) {
+        Map<String, Object> metadata = Map.of(
+            "course_id", lesson.getCourse().getId(),
+            "order_index", lesson.getOrderIndex()
+        );
+
+        EntitySyncEvent event = new EntitySyncEvent(
+            lesson.getId(),
+            EntityType.LESSON,
+            EntityAction.UPSERT,
+            metadata,
+            reEmbed,
+            System.currentTimeMillis()
+        );
+
+        eventProducer.sendEntitySyncEvent(event);
+    }
+
+    // sync for deleting lesson
+    private void sendDeleteEvent(Long id) {
+        EntitySyncEvent event = new EntitySyncEvent(
+            id,
+            EntityType.LESSON,
+            EntityAction.DELETE,
+            Map.of(),
+            false,
+            System.currentTimeMillis()
+        );
+        eventProducer.sendEntitySyncEvent(event);
     }
 }

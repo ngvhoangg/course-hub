@@ -12,6 +12,8 @@ import com.example.coursehub.common.kafka.event.EntityAction;
 import com.example.coursehub.common.kafka.event.EntitySyncEvent;
 import com.example.coursehub.course.Course;
 import com.example.coursehub.course.CourseRepository;
+import com.example.coursehub.lesson.Lesson;
+import com.example.coursehub.lesson.LessonRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -36,12 +38,14 @@ import java.util.Optional;
 @ConditionalOnProperty(name = "ai.enabled", havingValue = "true", matchIfMissing = true)
 public class EmbeddingSyncConsumer {
     private final CourseRepository courseRepository;
+    private final LessonRepository lessonRepository;
     private final EntityEmbeddingRepository embeddingRepository;
     private final AIClient aiClient;
     private final ObjectMapper objectMapper;
 
-    public EmbeddingSyncConsumer(CourseRepository courseRepository, EntityEmbeddingRepository embeddingRepository, AIClient aiClient, ObjectMapper objectMapper) {
+    public EmbeddingSyncConsumer(CourseRepository courseRepository, LessonRepository lessonRepository, EntityEmbeddingRepository embeddingRepository, AIClient aiClient, ObjectMapper objectMapper) {
         this.courseRepository = courseRepository;
+        this.lessonRepository = lessonRepository;
         this.embeddingRepository = embeddingRepository;
         this.aiClient = aiClient;
         this.objectMapper = objectMapper;
@@ -90,8 +94,9 @@ public class EmbeddingSyncConsumer {
     private void handleUpsert(EntitySyncEvent event) throws JsonProcessingException {
         if (event.entityType() == EntityType.COURSE) {
             handleCourseUpsert(event);
+        } else if (event.entityType() == EntityType.LESSON){
+            handleLessonUpsert(event);
         }
-        // handle other entities here
     }
 
     private void handleCourseUpsert(EntitySyncEvent event) throws JsonProcessingException {
@@ -104,7 +109,7 @@ public class EmbeddingSyncConsumer {
             Course course = courseRepository.findById(event.entityId())
                 .orElseThrow(() -> new UserError(ErrorCode.COURSE_NOT_FOUND));
 
-            String content = course.getTitle() + ". " + course.getDescription();
+            String content = "Title: " + course.getTitle() + "\nDescription: " + course.getDescription();
             List<Double> vector = aiClient.getEmbedding(content);
 
             embeddingRepository.upsert(
@@ -123,6 +128,38 @@ public class EmbeddingSyncConsumer {
                 metaJson
             );
             log.info("Patch Metadata successfully for Course ID: {}", event.entityId());
+        }
+    }
+
+    private void handleLessonUpsert(EntitySyncEvent event) throws JsonProcessingException {
+        Lesson lesson = lessonRepository.findByIdWithCourse(event.entityId())
+            .orElseThrow(() -> new UserError(ErrorCode.LESSON_NOT_FOUND));
+
+        String metaJson = objectMapper.writeValueAsString(
+            Optional.ofNullable(event.metadata()).orElse(Map.of())
+        );
+
+        if (event.reEmbed()) {
+            String content = "Title: " + lesson.getTitle() + "\nContent: " + lesson.getContent();
+
+            List<Double> vector = aiClient.getEmbedding(content);
+
+            embeddingRepository.upsert(
+                EntityType.LESSON.name(),
+                lesson.getId(),
+                content,
+                vector.toString(),
+                metaJson
+            );
+
+            log.info("Full Re-embed successfully for Lesson ID: {}", lesson.getId());
+        } else {
+            embeddingRepository.patchMetadata(
+                EntityType.LESSON.name(),
+                event.entityId(),
+                metaJson
+            );
+            log.info("Patch Metadata successfully for Lesson ID: {}", event.entityId());
         }
     }
 
