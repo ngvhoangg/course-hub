@@ -2,5 +2,6 @@ package com.example.coursehub.ai.embedding;
 
 public enum EntityType {
     COURSE,
-    LESSON
+    LESSON,
+    LESSON_CHUNK
 }

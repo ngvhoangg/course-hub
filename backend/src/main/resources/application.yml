@@ -39,6 +39,9 @@ spring:
 
 ai:
   base-url: ${AI_BASE_URL:http://localhost:8000}
+  chunking:
+    max-tokens: 200
+    overlap-sentences: 2
 
 jwt:
   secret: ${JWT_SECRET:secret}

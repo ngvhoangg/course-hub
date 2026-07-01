@@ -18,6 +18,15 @@ public interface EntityEmbeddingRepository extends JpaRepository<EntityEmbedding
     @Modifying
     @Transactional
     @Query(value = """
+        DELETE FROM entity_embeddings
+        WHERE entity_type = 'LESSON_CHUNK'
+          AND metadata->>'lessonId' = CAST(:lessonId AS text)
+        """, nativeQuery = true)
+    void deleteLessonChunks(@Param("lessonId") Long lessonId);
+
+    @Modifying
+    @Transactional
+    @Query(value = """
         UPDATE entity_embeddings 
         SET metadata = COALESCE(metadata, '{}'::jsonb) || CAST(:metadata AS jsonb), 
             updated_at = NOW() 

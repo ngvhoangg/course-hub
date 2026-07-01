@@ -34,6 +34,12 @@ spring:
       repositories:
         enabled: false
 
+ai:
+  base-url: ${AI_BASE_URL:http://localhost:8000}
+  chunking:
+    max-tokens: 200
+    overlap-sentences: 2
+
 jwt:
   secret: ${JWT_SECRET:key}
   access-token-expiration: 900000        # 15 minutes

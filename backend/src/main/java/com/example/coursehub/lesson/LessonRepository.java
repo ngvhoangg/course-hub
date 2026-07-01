@@ -23,4 +23,14 @@ public interface LessonRepository extends JpaRepository<Lesson,Long> {
         WHERE e.id IS NULL;
     """, nativeQuery = true)
     List<Lesson> findLessonsWithoutEmbedding();
+
+    @Query(value = """
+        SELECT l.id FROM lessons l
+        WHERE NOT EXISTS (
+            SELECT 1 FROM entity_embeddings e
+            WHERE e.entity_type = 'LESSON_CHUNK'
+              AND e.metadata->>'lessonId' = CAST(l.id AS text)
+        )
+    """, nativeQuery = true)
+    List<Long> findLessonIdsWithoutChunks();
 }

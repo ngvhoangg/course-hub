@@ -68,6 +68,18 @@ public class InitialVectorSyncTask implements CommandLineRunner {
             embeddingService.sync(EntityType.LESSON.name(), l.getId(), content, meta);
         }
 
+        // ===== LESSON CHUNKS =====
+        List<Long> lessonIds = lessonRepository.findLessonIdsWithoutChunks();
+        log.info("Found {} lessons without chunks", lessonIds.size());
+
+        for (Long id : lessonIds) {
+            Lesson l = lessonRepository.findByIdWithCourse(id)
+                .orElseThrow();
+            embeddingService.syncLessonChunks(l.getId(), l.getContent(), l.getCourse().getId());
+        }
+
+        log.info("Backfill chunk embedding completed!");
+
         log.info("Backfill embedding completed!");
     }
 }

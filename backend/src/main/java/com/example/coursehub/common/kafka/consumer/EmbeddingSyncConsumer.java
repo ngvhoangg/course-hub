@@ -1,6 +1,9 @@
 package com.example.coursehub.common.kafka.consumer;
 
+import com.example.coursehub.ai.chunking.LessonChunker;
+import com.example.coursehub.ai.chunking.dto.ChunkResult;
 import com.example.coursehub.ai.client.AIClient;
+import com.example.coursehub.ai.embedding.ChunkIdGenerator;
 import com.example.coursehub.ai.embedding.EntityEmbedding;
 import com.example.coursehub.ai.embedding.EntityEmbeddingRepository;
 import com.example.coursehub.ai.embedding.EntityType;
@@ -42,13 +45,17 @@ public class EmbeddingSyncConsumer {
     private final EntityEmbeddingRepository embeddingRepository;
     private final AIClient aiClient;
     private final ObjectMapper objectMapper;
+    private final LessonChunker lessonChunker;
+    private final ChunkIdGenerator chunkIdGenerator;
 
-    public EmbeddingSyncConsumer(CourseRepository courseRepository, LessonRepository lessonRepository, EntityEmbeddingRepository embeddingRepository, AIClient aiClient, ObjectMapper objectMapper) {
+    public EmbeddingSyncConsumer(CourseRepository courseRepository, LessonRepository lessonRepository, EntityEmbeddingRepository embeddingRepository, AIClient aiClient, ObjectMapper objectMapper, LessonChunker lessonChunker, ChunkIdGenerator chunkIdGenerator) {
         this.courseRepository = courseRepository;
         this.lessonRepository = lessonRepository;
         this.embeddingRepository = embeddingRepository;
         this.aiClient = aiClient;
         this.objectMapper = objectMapper;
+        this.lessonChunker = lessonChunker;
+        this.chunkIdGenerator = chunkIdGenerator;
     }
 
     @RetryableTopic(
@@ -68,13 +75,15 @@ public class EmbeddingSyncConsumer {
         log.info("Processing event: {} ID: {}, Action: {}",
             event.entityType(), event.entityId(), event.action());
 
-        // Ordering Check
-        Optional<EntityEmbedding> existing = embeddingRepository.findByEntityTypeAndEntityId(event.entityType(), event.entityId());
+        if (event.entityType() != EntityType.LESSON_CHUNK) {
+            // Ordering Check
+            Optional<EntityEmbedding> existing = embeddingRepository.findByEntityTypeAndEntityId(event.entityType(), event.entityId());
 
-        if (existing.isPresent()) {
-            long lastUpdated = existing.get().getUpdatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
-            if (event.occurredAt() <= lastUpdated) {
-                return;
+            if (existing.isPresent()) {
+                long lastUpdated = existing.get().getUpdatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+                if (event.occurredAt() <= lastUpdated) {
+                    return;
+                }
             }
         }
 
@@ -83,11 +92,17 @@ public class EmbeddingSyncConsumer {
             handleDelete(event);
         } else if (event.action() == EntityAction.UPSERT) {
             handleUpsert(event);
+        } else if (event.entityType() == EntityType.LESSON_CHUNK) {
+            log.warn("LESSON_CHUNK should not be synced directly");
         }
     }
 
     private void handleDelete(EntitySyncEvent event) {
         embeddingRepository.deleteByEntityTypeAndEntityId(event.entityType(), event.entityId());
+        if (event.entityType() == EntityType.LESSON) {
+            embeddingRepository.deleteLessonChunks(event.entityId());
+            log.info("Deleted all chunks for Lesson ID: {}", event.entityId());
+        }
         log.info("Deleted vector successfully for {} ID: {}", event.entityType(), event.entityId());
     }
 
@@ -140,19 +155,7 @@ public class EmbeddingSyncConsumer {
         );
 
         if (event.reEmbed()) {
-            String content = "Title: " + lesson.getTitle() + "\nContent: " + lesson.getContent();
-
-            List<Double> vector = aiClient.getEmbedding(content);
-
-            embeddingRepository.upsert(
-                EntityType.LESSON.name(),
-                lesson.getId(),
-                content,
-                vector.toString(),
-                metaJson
-            );
-
-            log.info("Full Re-embed successfully for Lesson ID: {}", lesson.getId());
+            syncLesson(lesson, metaJson);
         } else {
             embeddingRepository.patchMetadata(
                 EntityType.LESSON.name(),
@@ -160,6 +163,58 @@ public class EmbeddingSyncConsumer {
                 metaJson
             );
             log.info("Patch Metadata successfully for Lesson ID: {}", event.entityId());
+        }
+    }
+
+    private void syncLesson(Lesson lesson, String metaJson) throws JsonProcessingException {
+        Long lessonId = lesson.getId();
+        Long courseId = lesson.getCourse().getId();
+
+        // 1. Lesson-level embedding
+        String lessonContent = "Title: " + lesson.getTitle() + "\nContent: " + lesson.getContent();
+
+        List<Double> lessonVector = aiClient.getEmbedding(lessonContent);
+
+        embeddingRepository.upsert(
+            EntityType.LESSON.name(),
+            lessonId,
+            lessonContent,
+            lessonVector.toString(),
+            metaJson
+        );
+
+        // 2. Chunk embedding
+        List<ChunkResult> chunks = lessonChunker.chunk(lesson.getContent());
+
+        embeddingRepository.deleteLessonChunks(lessonId);
+
+        for (ChunkResult chunk : chunks) {
+            Long chunkId =
+                chunkIdGenerator.generate(
+                    lessonId,
+                    chunk.chunkIndex()
+                );
+
+            Map<String,Object> meta = Map.of(
+                "lessonId", lessonId,
+                "courseId", courseId,
+                "chunkIndex", chunk.chunkIndex(),
+                "totalChunks", chunks.size(),
+                "tokenCount", chunk.tokenCount(),
+                "startOffset", chunk.startOffset(),
+                "endOffset", chunk.endOffset()
+            );
+
+            List<Double> vector =
+                aiClient.getEmbedding(chunk.content());
+
+            embeddingRepository.upsert(
+                EntityType.LESSON_CHUNK.name(),
+                chunkId,
+                chunk.content(),
+                vector.toString(),
+                objectMapper.writeValueAsString(meta)
+            );
         }
     }
 
